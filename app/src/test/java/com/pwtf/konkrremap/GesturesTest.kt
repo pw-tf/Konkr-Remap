@@ -62,6 +62,16 @@ class GesturesTest {
         assertEquals(listOf("1↓", "1↑"), out)
     }
 
+    @Test fun stickDirectionsWithDiagonalsAndHysteresis() {
+        val log = mutableListOf<String>()
+        val s = StickButtons { code, down -> log += "${code - LEFT_STICK}${if (down) "↓" else "↑"}" }
+        s.update(LEFT_STICK, 0f, -0.6f) // up
+        s.update(LEFT_STICK, 0f, -0.4f) // still up (above release threshold)
+        s.update(LEFT_STICK, -0.7f, -0.7f) // up-left diagonal
+        s.update(LEFT_STICK, 0f, 0f)
+        assertEquals(listOf("0↓", "2↓", "0↑", "2↑"), log)
+    }
+
     @Test fun versions() {
         assertTrue(newer("1.10.0", "1.9.2"))
         assertTrue(newer("0.1.0", "0.0.0"))

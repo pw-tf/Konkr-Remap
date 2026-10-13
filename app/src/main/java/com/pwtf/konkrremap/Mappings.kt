@@ -19,6 +19,40 @@ typealias Profiles = Map<String, Map<Int, Mapping>>
 
 const val ALL_APPS = ""
 
+/** Stick directions are mapped like buttons using made-up keycodes far above Android's: up, down, left, right. */
+const val LEFT_STICK = 9001
+const val RIGHT_STICK = 9005
+const val HAT = 9009 // D-pads that report as a "hat" axis; routed to the D-pad keys, not shown in the UI
+val STICK_CODES = LEFT_STICK until HAT
+
+/**
+ * Turns stick positions into direction presses/releases. Diagonals press two directions.
+ * Hysteresis (press past [PRESS], release under [RELEASE]) stops a stick resting near the edge from chattering.
+ */
+class StickButtons(private val onChange: (code: Int, down: Boolean) -> Unit) {
+    private val held = LinkedHashSet<Int>()
+
+    /** [x], [y] in -1..1 (Android: y is positive downwards). [base] is the stick's "up" code. */
+    fun update(base: Int, x: Float, y: Float) {
+        set(base, -y); set(base + 1, y); set(base + 2, -x); set(base + 3, x)
+    }
+
+    /** Release everything, e.g. when switching apps mid-press. */
+    fun reset() = held.toList().forEach { held -= it; onChange(it, false) }
+
+    private fun set(code: Int, v: Float) {
+        val down = v > (if (code in held) RELEASE else PRESS)
+        if (down == (code in held)) return
+        if (down) held += code else held -= code
+        onChange(code, down)
+    }
+
+    companion object {
+        const val PRESS = 0.5f
+        const val RELEASE = 0.35f
+    }
+}
+
 /**
  * Turns physical presses into output combos. Pure (time and output injected) so it can be unit tested.
  * Runs on one thread: key events and [post] callbacks must arrive on the same looper.

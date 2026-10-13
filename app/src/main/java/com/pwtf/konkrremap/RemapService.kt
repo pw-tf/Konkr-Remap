@@ -2,10 +2,13 @@ package com.pwtf.konkrremap
 
 import android.accessibilityservice.AccessibilityService
 import android.media.AudioManager
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.view.InputDevice
 import android.view.KeyCharacterMap
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.accessibility.AccessibilityEvent
 
 /** Sees every physical button press, remaps it via [Gestures] and sends the result to the app in front. */
@@ -15,16 +18,47 @@ class RemapService : AccessibilityService() {
         post = { delay, block -> val r = Runnable(block); handler.postDelayed(r, delay); { handler.removeCallbacks(r) } },
         emit = ::emit,
     )
+    private val sticks = StickButtons { code, down ->
+        // A hat D-pad behaves like the D-pad keys: their mapping if there is one, else plain D-pad presses.
+        val key = if (code >= HAT) KeyEvent.KEYCODE_DPAD_UP + code - HAT else code
+        val m = Store.lookup(foreground, key) ?: if (code >= HAT) Mapping(listOf(key)) else null
+        gestures.onKey(key, down, 0, m)
+    }
     private var foreground: String? = null
 
-    override fun onServiceConnected() = Store.init(this)
+    override fun onServiceConnected() {
+        Store.init(this)
+        updateStickCapture()
+    }
 
     override fun onAccessibilityEvent(e: AccessibilityEvent) {
         val pkg = e.packageName?.toString() ?: return
         // Only real apps switch the profile; ignore the notification shade, keyboards and other overlays.
         if (e.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && packageManager.getLaunchIntentForPackage(pkg) != null) {
+            if (pkg != foreground) sticks.reset()
             foreground = pkg
+            updateStickCapture()
         }
+    }
+
+    /**
+     * Android 14+ can hand us stick movement, but then the app in front no longer gets it. So only take the sticks
+     * in apps where a stick direction is mapped; everywhere else games keep their analog input.
+     */
+    private fun updateStickCapture() {
+        val info = serviceInfo
+        if (Build.VERSION.SDK_INT < 34 || info == null) return
+        val keys = Store.profiles[ALL_APPS].orEmpty().keys + foreground?.let { Store.profiles[it]?.keys }.orEmpty()
+        val sources = if (foreground != packageName && keys.any { it in STICK_CODES }) InputDevice.SOURCE_JOYSTICK else 0
+        if (info.motionEventSources != sources) serviceInfo = info.apply { motionEventSources = sources }
+    }
+
+    override fun onMotionEvent(e: MotionEvent) {
+        if (!e.isFromSource(InputDevice.SOURCE_JOYSTICK)) return
+        val a = stickAxes(e)
+        sticks.update(LEFT_STICK, a[0], a[1])
+        sticks.update(RIGHT_STICK, a[2], a[3])
+        sticks.update(HAT, a[4], a[5])
     }
 
     override fun onKeyEvent(e: KeyEvent): Boolean {
@@ -76,4 +110,14 @@ class RemapService : AccessibilityService() {
             KeyEvent.KEYCODE_MEDIA_FAST_FORWARD, KeyEvent.KEYCODE_MEDIA_REWIND, KeyEvent.KEYCODE_HEADSETHOOK,
         )
     }
+}
+
+/** Left x/y, right x/y and hat (D-pad) x/y. Controllers put the right stick on Z/RZ or on RX/RY. */
+fun stickAxes(e: MotionEvent): FloatArray {
+    val zrz = e.device?.getMotionRange(MotionEvent.AXIS_Z) != null
+    return floatArrayOf(
+        e.getAxisValue(MotionEvent.AXIS_X), e.getAxisValue(MotionEvent.AXIS_Y),
+        e.getAxisValue(if (zrz) MotionEvent.AXIS_Z else MotionEvent.AXIS_RX), e.getAxisValue(if (zrz) MotionEvent.AXIS_RZ else MotionEvent.AXIS_RY),
+        e.getAxisValue(MotionEvent.AXIS_HAT_X), e.getAxisValue(MotionEvent.AXIS_HAT_Y),
+    )
 }

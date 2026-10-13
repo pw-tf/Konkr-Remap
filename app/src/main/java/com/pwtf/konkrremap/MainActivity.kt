@@ -9,7 +9,9 @@ import android.content.pm.PackageInstaller
 import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
+import android.view.InputDevice
 import android.view.KeyEvent
+import android.view.MotionEvent
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -105,6 +107,18 @@ class MainActivity : ComponentActivity() {
         // Capture on release so neither half of the press leaks into the UI.
         if (e.action == KeyEvent.ACTION_UP) { capture = null; c(e.keyCode) }
         return true
+    }
+
+    override fun dispatchGenericMotionEvent(e: MotionEvent): Boolean {
+        val c = capture
+        if (c == null || !e.isFromSource(InputDevice.SOURCE_JOYSTICK)) return super.dispatchGenericMotionEvent(e)
+        val a = stickAxes(e)
+        // A hat D-pad falls through: Android turns it into D-pad presses, which are captured as keys.
+        if (a[4] != 0f || a[5] != 0f) return super.dispatchGenericMotionEvent(e)
+        val dirs = listOf(-a[1], a[1], -a[0], a[0], -a[3], a[3], -a[2], a[2]) // up, down, left, right; left then right stick
+        val best = dirs.indices.maxBy { dirs[it] }
+        if (dirs[best] > StickButtons.PRESS) { capture = null; c(LEFT_STICK + best) }
+        return true // swallow it, or Android would turn the left stick into D-pad presses
     }
 
     private fun onInstallStatus(i: Intent) {
@@ -237,7 +251,7 @@ private fun App() {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Press a button", style = MaterialTheme.typography.titleLarge)
-                        Text("Press the button on your Konkr you want to remap.", color = Color.LightGray, modifier = Modifier.padding(vertical = 8.dp))
+                        Text("Press a button or push a stick on your Konkr.", color = Color.LightGray, modifier = Modifier.padding(vertical = 8.dp))
                         TextButton(onClick = { capture = null }) { Text("Cancel") }
                     }
                 }
@@ -353,6 +367,10 @@ private fun EditDialog(profile: String, key: Int, onDismiss: () -> Unit) {
                 }
                 Text("Hold and Double press are optional. Leave them unset for an instant 1:1 remap, which games need.",
                     style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                if (key in STICK_CODES) {
+                    Text("Apps where a stick is mapped stop getting analog stick input. Map sticks in a per-app setup " +
+                        "(e.g. Chrome) so your other games aren't affected.", style = MaterialTheme.typography.bodySmall, color = Accent)
+                }
             }
         },
         confirmButton = { Button(onClick = { Store.put(profile, key, m); onDismiss() }) { Text("Save") } },
@@ -491,7 +509,9 @@ private fun serviceEnabled(ctx: Context) =
 private fun appLabel(ctx: Context, pkg: String) =
     runCatching { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)
 
-private val NAMES = mapOf(
+private val NAMES = listOf("Left stick", "Right stick").flatMapIndexed { s, stick ->
+    listOf("↑", "↓", "←", "→").mapIndexed { d, arrow -> LEFT_STICK + s * 4 + d to "$stick $arrow" }
+}.toMap() + mapOf(
     KeyEvent.KEYCODE_DEL to "Backspace", KeyEvent.KEYCODE_FORWARD_DEL to "Delete", KeyEvent.KEYCODE_APP_SWITCH to "Recent apps",
     KeyEvent.KEYCODE_ESCAPE to "Esc", KeyEvent.KEYCODE_EQUALS to "=", KeyEvent.KEYCODE_MINUS to "-",
 )

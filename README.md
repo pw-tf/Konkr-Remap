@@ -9,6 +9,7 @@ in a game that gets them backwards.
 - **Any key or button.** Gamepad buttons, keyboard keys, Back/Home/Recent apps, media and volume keys.
 - **Key combos.** Hold Ctrl, Shift, Alt or Meta with any key (e.g. `Ctrl+Shift+Tab`).
 - **Press, Hold and Double press.** Give one button up to three actions.
+- **Analog sticks as buttons** (Android 14+). Each stick direction can be mapped, e.g. left stick → WASD.
 - **Per-app setups.** Different mappings in Chrome than in your games, switched automatically.
 - **Chrome shortcuts built in.** Next/previous tab, new/close tab, reload, back/forward, address bar, find, zoom.
 - **No root, no PC, no pairing.** Remapped keys are typed by Konkr Remap's own keyboard.
@@ -61,6 +62,19 @@ Tap any mapping in the list to change or remove it.
 > **Tip for games:** leave Hold and Double press empty. A button with only a Press action reacts instantly
 > and works when held down. With Hold or Double press set, the app has to wait to see which one you meant.
 
+### Analog sticks (Android 14+)
+
+On the **Add button** screen, push a stick in one direction instead of pressing a button. Each direction
+(e.g. *Left stick ↑*) is mapped like a button. Pushing diagonally presses two directions at once, and the keys
+stay held for as long as you hold the stick. That's what browser games expect.
+
+Example, WASD for a browser game: select **+ App › Chrome**, then map *Left stick ↑ → W*, *↓ → S*, *← → A*,
+*→ → D*.
+
+> In an app where any stick direction is mapped, Konkr Remap takes over the controller's analog input, so that
+> app no longer sees the sticks as sticks. Map sticks in a per-app setup (like Chrome) rather than **All apps** so
+> your other games keep normal analog control.
+
 ### Different buttons per app
 
 Tap **+ App** above the list and choose an app (e.g. Chrome). Mappings you add while that app is selected apply
@@ -89,7 +103,7 @@ in Android's install prompt. The first time, Android asks you to allow Konkr Rem
 | "Restricted setting" when turning on remapping | Settings › Apps › Konkr Remap › ⋮ › **Allow restricted settings**, then turn it on again. |
 | Remapped keys do nothing | Check the app's setup steps: the Konkr Remap keyboard must be turned on and selected. |
 | A key only works the second time | The first press switched back from your typing keyboard; Konkr Remap sends it as soon as its keyboard is ready. If it's still lost, press again. |
-| A button can't be detected | Analog triggers/sticks that only report a position (not a press) can't be remapped. |
+| A stick can't be detected | Stick mapping needs Android 14 or newer. Analog-only triggers (L2/R2 that report a position, not a press) aren't supported yet. |
 | A game ignores remapped buttons | Some games read the controller directly and ignore keys from a keyboard. Map to a keyboard key the game supports, or leave that button unmapped for that game with a per-app setup. |
 
 ## Privacy
