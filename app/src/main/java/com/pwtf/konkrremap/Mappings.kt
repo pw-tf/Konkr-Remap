@@ -7,6 +7,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import org.json.JSONArray
 import org.json.JSONObject
+import kotlin.math.abs
+import kotlin.math.atan2
+import kotlin.math.hypot
 
 /** Keycodes pressed together, modifiers first: [KEYCODE_CTRL_LEFT, KEYCODE_TAB]. Empty = button disabled. */
 typealias Combo = List<Int>
@@ -26,30 +29,47 @@ const val HAT = 9009 // D-pads that report as a "hat" axis; routed to the D-pad 
 val STICK_CODES = LEFT_STICK until HAT
 
 /**
- * Turns stick positions into direction presses/releases. Diagonals press two directions.
- * Hysteresis (press past [PRESS], release under [RELEASE]) stops a stick resting near the edge from chattering.
+ * Turns stick positions into direction presses/releases, 8-way: once pushed past [PRESS], the 45° slice the stick
+ * points into decides the keys, so diagonals reliably hold two (e.g. W+A). Releasing needs the stick back under
+ * [RELEASE], and leaving a slice needs [STICKY]° of overshoot, so a thumb resting on a border doesn't flicker.
  */
 class StickButtons(private val onChange: (code: Int, down: Boolean) -> Unit) {
-    private val held = LinkedHashSet<Int>()
+    private val slice = HashMap<Int, Int>() // stick's "up" code -> slice 0..7 (0 = right, counter-clockwise)
 
     /** [x], [y] in -1..1 (Android: y is positive downwards). [base] is the stick's "up" code. */
     fun update(base: Int, x: Float, y: Float) {
-        set(base, -y); set(base + 1, y); set(base + 2, -x); set(base + 3, x)
+        val cur = slice[base]
+        val next = if (hypot(x, y) < (if (cur == null) PRESS else RELEASE)) null else {
+            val angle = Math.toDegrees(atan2(-y, x).toDouble())
+            val off = cur?.let { abs((angle - it * 45 + 540) % 360 - 180) }
+            if (off != null && off < 22.5 + STICKY) cur else Math.floorMod(Math.round(angle / 45).toInt(), 8)
+        }
+        if (next == cur) return
+        if (next == null) slice -= base else slice[base] = next
+        val was = dirs(cur)
+        val now = dirs(next)
+        (was - now).forEach { onChange(base + it, false) }
+        (now - was).forEach { onChange(base + it, true) }
     }
 
     /** Release everything, e.g. when switching apps mid-press. */
-    fun reset() = held.toList().forEach { held -= it; onChange(it, false) }
+    fun reset() {
+        val held = slice.toMap()
+        slice.clear()
+        held.forEach { (base, s) -> dirs(s).forEach { onChange(base + it, false) } }
+    }
 
-    private fun set(code: Int, v: Float) {
-        val down = v > (if (code in held) RELEASE else PRESS)
-        if (down == (code in held)) return
-        if (down) held += code else held -= code
-        onChange(code, down)
+    // Offsets from the "up" code: 0 up, 1 down, 2 left, 3 right.
+    private fun dirs(s: Int?): Set<Int> = when (s) {
+        null -> emptySet()
+        0 -> setOf(3); 1 -> setOf(0, 3); 2 -> setOf(0); 3 -> setOf(0, 2)
+        4 -> setOf(2); 5 -> setOf(1, 2); 6 -> setOf(1); else -> setOf(1, 3)
     }
 
     companion object {
         const val PRESS = 0.5f
         const val RELEASE = 0.35f
+        const val STICKY = 7.5
     }
 }
 

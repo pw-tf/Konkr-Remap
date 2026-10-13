@@ -72,6 +72,23 @@ class GesturesTest {
         assertEquals(listOf("0↓", "2↓", "0↑", "2↑"), log)
     }
 
+    @Test fun shallowDiagonalStillPressesBoth() {
+        val log = mutableListOf<String>()
+        val s = StickButtons { code, down -> log += "${code - LEFT_STICK}${if (down) "↓" else "↑"}" }
+        s.update(LEFT_STICK, -0.45f, -0.45f) // each axis under 0.5, but clearly pushed up-left
+        assertEquals(listOf("0↓", "2↓"), log)
+    }
+
+    @Test fun borderDoesNotFlicker() {
+        val log = mutableListOf<String>()
+        val s = StickButtons { code, down -> log += "${code - LEFT_STICK}${if (down) "↓" else "↑"}" }
+        s.update(LEFT_STICK, -0.42f, -0.91f) // 115°: up-left
+        s.update(LEFT_STICK, -0.34f, -0.94f) // 110°: over the border, but within the sticky margin
+        assertEquals(listOf("0↓", "2↓"), log)
+        s.update(LEFT_STICK, -0.17f, -0.98f) // 100°: clearly up
+        assertEquals(listOf("0↓", "2↓", "2↑"), log)
+    }
+
     @Test fun versions() {
         assertTrue(newer("1.10.0", "1.9.2"))
         assertTrue(newer("0.1.0", "0.0.0"))
