@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -38,7 +39,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -76,7 +76,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-private val Accent = Color(0xFFFF6B2C)
+internal val Accent = Color(0xFFFF6B2C)
 private val Ok = Color(0xFF3DDC84)
 private val Colors = darkColorScheme(
     primary = Accent, onPrimary = Color.White,
@@ -87,6 +87,12 @@ private val Colors = darkColorScheme(
 
 /** Set while the "press a button" dialog is open; MainActivity routes the next button to it. */
 private var capture by mutableStateOf<((Int) -> Unit)?>(null)
+private var captureWhat by mutableStateOf<String?>(null) // which control we're asking for, if any
+
+private fun detect(what: String?, then: (Int) -> Unit) {
+    captureWhat = what
+    capture = then
+}
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -160,9 +166,9 @@ private fun App() {
             containerColor = MaterialTheme.colorScheme.background,
             floatingActionButton = {
                 ExtendedFloatingActionButton(
-                    onClick = { capture = { editing = it } },
+                    onClick = { detect(null) { editing = it } },
                     icon = { Icon(Icons.Default.Add, null) },
-                    text = { Text("Add button") },
+                    text = { Text("Other button") },
                     containerColor = Accent, contentColor = Color.White,
                 )
             },
@@ -228,17 +234,25 @@ private fun App() {
     
                 item { ProfileChips(profile, onSelect = { profile = it }, onAdd = { pickingApp = true }) }
     
-                val mappings = Store.profiles[profile].orEmpty().entries.sortedBy { keyName(it.key) }
-                if (mappings.isEmpty()) {
-                    item {
+                val mapped = Store.profiles[profile].orEmpty()
+                item {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        ControllerDrawing(
+                            output = false,
+                            lit = { it in mapped },
+                            // Controls without a standard code (back buttons) are detected the first time.
+                            onTap = { p -> p.current?.let { editing = it } ?: detect(p.long) { Store.learn(p.name, it); editing = it } },
+                            onLongPress = { p -> detect(p.long) { Store.learn(p.name, it); editing = it } },
+                            modifier = Modifier.widthIn(max = 720.dp),
+                        )
                         Text(
-                            if (profile == ALL_APPS) "No buttons remapped yet. Tap Add button, then press a button on your Konkr."
-                            else "No overrides for this app. Buttons here replace the All apps setup, only in this app.",
-                            color = Color.Gray, modifier = Modifier.padding(vertical = 24.dp),
+                            if (profile == ALL_APPS) "Tap a button to remap it. Long-press one to re-detect it if it doesn't react."
+                            else "Buttons mapped here replace the All apps setup, only in this app.",
+                            style = MaterialTheme.typography.bodySmall, color = Color.Gray,
                         )
                     }
                 }
-                items(mappings, key = { it.key }) { (key, m) -> MappingRow(key, m) { editing = key } }
+                items(mapped.entries.sortedBy { inputName(it.key) }, key = { it.key }) { (key, m) -> MappingRow(key, m) { editing = key } }
             }
         }
     
@@ -251,7 +265,8 @@ private fun App() {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
                     Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("Press a button", style = MaterialTheme.typography.titleLarge)
-                        Text("Press a button or push a stick on your Konkr.", color = Color.LightGray, modifier = Modifier.padding(vertical = 8.dp))
+                        Text(captureWhat?.let { "Press $it on your Konkr." } ?: "Press a button or push a stick on your Konkr.",
+                            color = Color.LightGray, modifier = Modifier.padding(vertical = 8.dp))
                         TextButton(onClick = { capture = null }) { Text("Cancel") }
                     }
                 }
@@ -316,7 +331,7 @@ private fun MappingRow(key: Int, m: Mapping, onClick: () -> Unit) {
         shape = RoundedCornerShape(16.dp),
     ) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Keycap(keyName(key))
+            Keycap(inputName(key))
             Text("  →  ", color = Accent, fontWeight = FontWeight.Bold)
             Column(Modifier.weight(1f)) {
                 Text(comboName(m.tap), style = MaterialTheme.typography.titleMedium)
@@ -341,12 +356,13 @@ private enum class Slot(val label: String) { Tap("Press"), Hold("Hold"), Double(
 @Composable
 private fun EditDialog(profile: String, key: Int, onDismiss: () -> Unit) {
     val existing = Store.profiles[profile]?.get(key)
-    var m by remember { mutableStateOf(existing ?: Mapping(listOf(key))) }
-    var picking by remember { mutableStateOf<Slot?>(null) }
+    var m by remember { mutableStateOf(existing ?: Mapping(emptyList())) }
+    // A new mapping goes straight to choosing what the button does.
+    var picking by remember { mutableStateOf(if (existing == null) Slot.Tap else null) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Row(verticalAlignment = Alignment.CenterVertically) { Keycap(keyName(key)); Text("  does…") } },
+        title = { Row(verticalAlignment = Alignment.CenterVertically) { Keycap(inputName(key)); Text("  does…") } },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Slot.entries.forEach { slot ->
@@ -383,92 +399,24 @@ private fun EditDialog(profile: String, key: Int, onDismiss: () -> Unit) {
     )
 
     picking?.let { slot ->
-        KeyPicker(onDismiss = { picking = null }) { c ->
+        KeyPicker(onDismiss = { picking = null; if (existing == null && m.tap.isEmpty()) onDismiss() }) { c ->
             m = when (slot) { Slot.Tap -> m.copy(tap = c); Slot.Hold -> m.copy(hold = c); Slot.Double -> m.copy(double = c) }
             picking = null
         }
     }
 }
 
-private val MODIFIERS = listOf(
+internal val MODIFIERS = listOf(
     KeyEvent.KEYCODE_CTRL_LEFT to "Ctrl", KeyEvent.KEYCODE_SHIFT_LEFT to "Shift",
     KeyEvent.KEYCODE_ALT_LEFT to "Alt", KeyEvent.KEYCODE_META_LEFT to "Meta",
 )
 
-private fun ctrl(vararg k: Int) = listOf(KeyEvent.KEYCODE_CTRL_LEFT) + k.toList()
-private val CHROME = listOf(
-    "Next tab" to ctrl(KeyEvent.KEYCODE_TAB),
-    "Previous tab" to ctrl(KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_TAB),
-    "New tab" to ctrl(KeyEvent.KEYCODE_T),
-    "Close tab" to ctrl(KeyEvent.KEYCODE_W),
-    "Reload" to ctrl(KeyEvent.KEYCODE_R),
-    "Back" to listOf(KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_DPAD_LEFT),
-    "Forward" to listOf(KeyEvent.KEYCODE_ALT_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT),
-    "Address bar" to ctrl(KeyEvent.KEYCODE_L),
-    "Find in page" to ctrl(KeyEvent.KEYCODE_F),
-    "Zoom in" to ctrl(KeyEvent.KEYCODE_EQUALS),
-    "Zoom out" to ctrl(KeyEvent.KEYCODE_MINUS),
-)
-private val COMMON = listOf(
-        KeyEvent.KEYCODE_PAGE_DOWN, KeyEvent.KEYCODE_PAGE_UP, KeyEvent.KEYCODE_SPACE, KeyEvent.KEYCODE_TAB, KeyEvent.KEYCODE_ENTER,
-        KeyEvent.KEYCODE_ESCAPE, KeyEvent.KEYCODE_DEL, KeyEvent.KEYCODE_MOVE_HOME, KeyEvent.KEYCODE_MOVE_END,
-        KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
-        KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_HOME, KeyEvent.KEYCODE_APP_SWITCH,
-        KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_NEXT, KeyEvent.KEYCODE_MEDIA_PREVIOUS,
-        KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN,
-        KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BUTTON_X, KeyEvent.KEYCODE_BUTTON_Y,
-        KeyEvent.KEYCODE_BUTTON_L1, KeyEvent.KEYCODE_BUTTON_R1, KeyEvent.KEYCODE_BUTTON_L2, KeyEvent.KEYCODE_BUTTON_R2,
-        KeyEvent.KEYCODE_BUTTON_THUMBL, KeyEvent.KEYCODE_BUTTON_THUMBR, KeyEvent.KEYCODE_BUTTON_START, KeyEvent.KEYCODE_BUTTON_SELECT,
-)
-private val ALL_KEYS = (1..KeyEvent.getMaxKeyCode()).filter { !KeyEvent.keyCodeToString(it)[0].isDigit() }
-
 @Composable
-private fun KeyPicker(onDismiss: () -> Unit, onPick: (Combo) -> Unit) {
-    var mods by remember { mutableStateOf(emptyList<Int>()) }
-    var query by remember { mutableStateOf("") }
-    val pickKey = { k: Int -> onPick(mods + k) }
-
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Surface(Modifier.fillMaxSize().padding(16.dp), shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Choose a key", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-                    Icon(Icons.Default.Close, "Close", Modifier.clickable(onClick = onDismiss))
-                }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("Hold with:", color = Color.Gray)
-                    MODIFIERS.forEach { (code, label) ->
-                        FilterChip(selected = code in mods, onClick = { mods = if (code in mods) mods - code else mods + code }, label = { Text(label) })
-                    }
-                }
-                OutlinedTextField(
-                    query, { query = it }, Modifier.fillMaxWidth(),
-                    placeholder = { Text("Search all keys") }, singleLine = true, leadingIcon = { Icon(Icons.Default.Search, null) },
-                )
-                LazyColumn(Modifier.weight(1f)) {
-                    if (query.isEmpty()) {
-                        item { Header("Chrome shortcuts") }
-                        items(CHROME) { (label, combo) -> PickRow(label, comboName(combo)) { onPick(combo) } }
-                        item { Header("Common") }
-                        item { PickRow("Do nothing", "Disables the button") { onPick(emptyList()) } }
-                        items(COMMON) { k -> PickRow(keyName(k)) { pickKey(k) } }
-                        item { Header("All keys") }
-                    }
-                    items(ALL_KEYS.filter { query.isEmpty() || keyName(it).contains(query, ignoreCase = true) }) { k ->
-                        PickRow(keyName(k)) { pickKey(k) }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun Header(text: String) =
+internal fun Header(text: String) =
     Text(text, Modifier.padding(top = 16.dp, bottom = 4.dp), color = Accent, style = MaterialTheme.typography.labelLarge)
 
 @Composable
-private fun PickRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
+internal fun PickRow(title: String, subtitle: String? = null, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp, horizontal = 4.dp)) {
         Text(title, style = MaterialTheme.typography.bodyLarge)
         subtitle?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = Color.Gray) }
@@ -514,8 +462,15 @@ private val NAMES = listOf("Left stick", "Right stick").flatMapIndexed { s, stic
 }.toMap() + mapOf(
     KeyEvent.KEYCODE_DEL to "Backspace", KeyEvent.KEYCODE_FORWARD_DEL to "Delete", KeyEvent.KEYCODE_APP_SWITCH to "Recent apps",
     KeyEvent.KEYCODE_ESCAPE to "Esc", KeyEvent.KEYCODE_EQUALS to "=", KeyEvent.KEYCODE_MINUS to "-",
+    KeyEvent.KEYCODE_DPAD_UP to "Up", KeyEvent.KEYCODE_DPAD_DOWN to "Down", KeyEvent.KEYCODE_DPAD_LEFT to "Left",
+    KeyEvent.KEYCODE_DPAD_RIGHT to "Right", KeyEvent.KEYCODE_SYSRQ to "PrtSc / Screenshot",
+    KeyEvent.KEYCODE_BUTTON_A to "Gamepad A", KeyEvent.KEYCODE_BUTTON_B to "Gamepad B",
+    KeyEvent.KEYCODE_BUTTON_X to "Gamepad X", KeyEvent.KEYCODE_BUTTON_Y to "Gamepad Y",
+    KeyEvent.KEYCODE_BUTTON_L1 to "LB", KeyEvent.KEYCODE_BUTTON_R1 to "RB", KeyEvent.KEYCODE_BUTTON_L2 to "LT",
+    KeyEvent.KEYCODE_BUTTON_R2 to "RT", KeyEvent.KEYCODE_BUTTON_THUMBL to "L3", KeyEvent.KEYCODE_BUTTON_THUMBR to "R3",
+    KeyEvent.KEYCODE_BUTTON_START to "Start", KeyEvent.KEYCODE_BUTTON_SELECT to "Select", KeyEvent.KEYCODE_BUTTON_MODE to "Guide",
 )
-private val MOD_NAMES = MODIFIERS.toMap() + mapOf(
+internal val MOD_NAMES = MODIFIERS.toMap() + mapOf(
     KeyEvent.KEYCODE_CTRL_RIGHT to "Ctrl", KeyEvent.KEYCODE_SHIFT_RIGHT to "Shift",
     KeyEvent.KEYCODE_ALT_RIGHT to "Alt", KeyEvent.KEYCODE_META_RIGHT to "Meta",
 )

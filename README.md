@@ -48,24 +48,31 @@ When all three are done the app shows **● Remapping is active**. Nothing else 
 
 ### Remap a button
 
-1. Tap **Add button**, then press the button on your Konkr you want to change.
-2. Tap **Press** and choose what it should do:
-   - **Chrome shortcuts**: ready-made combos for browsing.
-   - **Common**: the keys most people want, plus **Do nothing** to disable a button.
-   - **Search all keys**: every key Android knows.
-   - To make a combo, tick **Ctrl / Shift / Alt / Meta** under *Hold with* before picking the key.
+The main screen shows your Konkr. Mapped buttons are lit.
+
+1. Tap the button you want to change. The **back buttons** and the **custom button** don't have a standard
+   code, so the first time you tap one, the app asks you to press it once to detect it. If any button doesn't
+   react, long-press it in the drawing to detect it again.
+2. Choose what it does. There are three tabs:
+   - **Keyboard**: a full keyboard (function keys, arrows, Insert/Home/PgUp cluster, numpad). Tap one key, or
+     several to make a combo (e.g. **Ctrl** then **Tab**), then **Done**. Tap a key again to remove it.
+   - **Gamepad**: the controller buttons (A/B/X/Y, bumpers, triggers, stick clicks, D-pad, Start/Select/Guide,
+     plus C, Z and 1–16). Combine them the same way.
+   - **System**: Home, Back, Recent apps, notifications, screenshot, lock, power menu, media and volume keys,
+     ready-made Chrome shortcuts, **Do nothing** (disable the button) and a search of every Android key.
 3. Optional: set **Hold** (button held for 0.4 s) and/or **Double press** (two presses within 0.25 s).
 4. Tap **Save**.
 
-Tap any mapping in the list to change or remove it.
+Your mappings are listed under the drawing; tap one to change or remove it. Buttons that aren't on the drawing
+(e.g. volume keys) can be added with **Other button**.
 
 > **Tip for games:** leave Hold and Double press empty. A button with only a Press action reacts instantly
 > and works when held down. With Hold or Double press set, the app has to wait to see which one you meant.
 
 ### Analog sticks (Android 14+)
 
-On the **Add button** screen, push a stick in one direction instead of pressing a button. Each direction
-(e.g. *Left stick ↑*) is mapped like a button. Pushing diagonally presses two directions at once, and the keys
+Each stick has four arrows around it in the drawing; tap one to map that direction like a button (or use
+**Other button** and push the stick). Pushing diagonally presses two directions at once, and the keys
 stay held for as long as you hold the stick. That's what browser games expect.
 
 Example, WASD for a browser game: select **+ App › Chrome**, then map *Left stick ↑ → W*, *↓ → S*, *← → A*,
@@ -152,4 +159,5 @@ Version rules, so the in-app updater sees the new version:
 | `Mappings.kt` | Mapping model, JSON storage, and `Gestures` (press / hold / double-press logic, unit tested). |
 | `Keyboard.kt` | `RemapKeyboard` input method: types remapped keys (with Ctrl/Shift/Alt/Meta) into the app in front through its input connection. The service switches back to it when another keyboard is selected. |
 | `Updater.kt` | Checks GitHub Releases and installs through `PackageInstaller`. |
-| `MainActivity.kt` | Jetpack Compose UI. |
+| `MainActivity.kt` | Jetpack Compose UI: setup steps, profiles, mapping list and editor. |
+| `Picker.kt` | The Konkr drawing (`Pad` positions) and the Keyboard / Gamepad / System picker. |

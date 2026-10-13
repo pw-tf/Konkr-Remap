@@ -167,10 +167,22 @@ object Store {
     var profiles: Profiles by mutableStateOf(emptyMap())
         private set
 
+    /** Keycodes detected for controls on the drawing (by [Pad] name), e.g. the back buttons. */
+    var learned: Map<String, Int> by mutableStateOf(emptyMap())
+        private set
+
     fun init(ctx: Context) {
         if (::prefs.isInitialized) return
         prefs = ctx.getSharedPreferences("mappings", Context.MODE_PRIVATE)
         profiles = runCatching { decode(JSONObject(prefs.getString("profiles", "{}")!!)) }.getOrDefault(emptyMap())
+        learned = runCatching {
+            JSONObject(prefs.getString("learned", "{}")!!).let { j -> j.keys().asSequence().associateWith { j.getInt(it) } }
+        }.getOrDefault(emptyMap())
+    }
+
+    fun learn(pad: String, code: Int) {
+        learned = learned + (pad to code)
+        prefs.edit().putString("learned", JSONObject(learned).toString()).apply()
     }
 
     fun lookup(pkg: String?, key: Int): Mapping? = pkg?.let { profiles[it]?.get(key) } ?: profiles[ALL_APPS]?.get(key)
