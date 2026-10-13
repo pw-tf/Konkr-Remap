@@ -2,19 +2,19 @@
 
 package com.pwtf.konkrremap
 
-import android.Manifest
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.net.Uri
 import android.os.Bundle
 import android.provider.Settings
 import android.view.KeyEvent
+import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -121,8 +121,9 @@ class MainActivity : ComponentActivity() {
 private fun App() {
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    var helper by remember { mutableStateOf(false) }
     var service by remember { mutableStateOf(false) }
+    var kbEnabled by remember { mutableStateOf(false) }
+    var kbSelected by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var update by remember { mutableStateOf<Updater.Release?>(null) }
@@ -133,25 +134,11 @@ private fun App() {
     LaunchedEffect(Unit) { update = withContext(Dispatchers.IO) { Updater.check() } }
     LaunchedEffect(Unit) {
         while (true) {
-            helper = withContext(Dispatchers.IO) { Injector.connected() }
-            service = Adb.serviceEnabled(ctx)
+            service = serviceEnabled(ctx)
+            kbEnabled = RemapKeyboard.isEnabled(ctx)
+            kbSelected = RemapKeyboard.isSelected(ctx)
             delay(1500)
         }
-    }
-
-    fun startHelper() {
-        busy = true
-        scope.launch {
-            message = withContext(Dispatchers.IO) { Adb.startHelper(ctx) }
-            busy = false
-        }
-    }
-    val pairLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (!granted) { message = "Allow notifications so you can type the pairing code."; return@rememberLauncherForActivityResult }
-        Pairing.prompt(ctx)
-        runCatching {
-            ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS).putExtra(":settings:fragment_args_key", "toggle_adb_wireless"))
-        }.onFailure { message = "Turn on Developer options first: Settings > About > tap Build number 7 times." }
     }
 
     Box {
@@ -180,7 +167,7 @@ private fun App() {
                 }
                 update?.let { r ->
                     item {
-                        Banner("Version ${r.version} is available", "Update") {
+                        Banner("Version ${r.version} is available", "Update", enabled = !busy) {
                             busy = true
                             scope.launch {
                                 message = withContext(Dispatchers.IO) { runCatching { Updater.install(ctx, r) }.exceptionOrNull()?.let { "Download failed: ${it.message}" } }
@@ -189,17 +176,30 @@ private fun App() {
                         }
                     }
                 }
-                if (!helper || !service) {
+                if (!service || !kbEnabled || !kbSelected) {
                     item {
-                        Step(1, "Start the helper", helper,
-                            "Lets remapped keys reach every app. Needs Wi-Fi and Developer options. Pair once; after that it restarts by itself.") {
-                            FilledTonalButton(onClick = { pairLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }, enabled = !busy) { Text("Pair") }
-                            Button(onClick = ::startHelper, enabled = !busy) { Text("Start") }
+                        Step(1, "Turn on remapping", service,
+                            "Lets Konkr Remap see your button presses. If Android says \"Restricted setting\", tap App info › ⋮ › " +
+                                "Allow restricted settings, then try again.") {
+                            Button(onClick = { ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }) { Text("Turn on") }
+                            FilledTonalButton(onClick = {
+                                ctx.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")))
+                            }) { Text("App info") }
                         }
                     }
                     item {
-                        Step(2, "Turn on remapping", service, "Lets Konkr Remap see your button presses.") {
-                            Button(onClick = { if (!Adb.enableService(ctx)) ctx.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }) { Text("Turn on") }
+                        Step(2, "Turn on the Konkr Remap keyboard", kbEnabled,
+                            "Remapped keys are typed into other apps by this keyboard. Turn on Konkr Remap in the list.") {
+                            Button(onClick = { ctx.startActivity(Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)) }) { Text("Turn on") }
+                        }
+                    }
+                    item {
+                        Step(3, "Select the keyboard", kbSelected,
+                            "Pick Konkr Remap as your keyboard. To type text, tap Switch keyboard on its bar; it switches back " +
+                                "by itself when you press a remapped button.") {
+                            Button(onClick = { ctx.getSystemService(InputMethodManager::class.java).showInputMethodPicker() }, enabled = kbEnabled) {
+                                Text("Select")
+                            }
                         }
                     }
                 } else {
@@ -249,11 +249,11 @@ private fun App() {
 }
 
 @Composable
-private fun Banner(text: String, action: String, onClick: () -> Unit) {
+private fun Banner(text: String, action: String, enabled: Boolean, onClick: () -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = Accent.copy(alpha = 0.15f))) {
         Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(text, Modifier.weight(1f))
-            Button(onClick = onClick) { Text(action) }
+            Button(onClick = onClick, enabled = enabled) { Text(action) }
         }
     }
 }
@@ -483,6 +483,10 @@ private fun AppPicker(onPick: (String) -> Unit, onDismiss: () -> Unit) {
         }
     }
 }
+
+private fun serviceEnabled(ctx: Context) =
+    Settings.Secure.getString(ctx.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
+        .contains(ComponentName(ctx, RemapService::class.java).flattenToString())
 
 private fun appLabel(ctx: Context, pkg: String) =
     runCatching { ctx.packageManager.getApplicationLabel(ctx.packageManager.getApplicationInfo(pkg, 0)).toString() }.getOrDefault(pkg)

@@ -13,7 +13,7 @@ android {
 
     defaultConfig {
         applicationId = "com.pwtf.konkrremap"
-        minSdk = 30 // Wireless debugging (used to start the helper) needs Android 11.
+        minSdk = 30 // AccessibilityService.softKeyboardController.switchToInputMethod needs Android 11.
         targetSdk = 35
         versionCode = (findProperty("versionCode") as String?)?.toInt() ?: 1
         versionName = findProperty("versionName") as String? ?: "0.0.0"
@@ -30,7 +30,7 @@ android {
 
     buildTypes {
         release {
-            // ponytail: no R8, the helper is started by class name via app_process. Add keep rules if APK size matters.
+            // ponytail: no R8 yet. Turn it on (and test a release build) if APK size matters.
             isMinifyEnabled = false
             if (keystorePassword != null) signingConfig = signingConfigs["release"]
         }
@@ -45,7 +45,6 @@ android {
         compose = true
         buildConfig = true
     }
-    packaging { resources.excludes += "META-INF/versions/9/OSGI-INF/MANIFEST.MF" }
 }
 
 dependencies {
@@ -53,11 +52,6 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.activity:activity-compose:1.9.3")
-
-    // ADB client used to pair with Wireless debugging and start the helper.
-    implementation("com.github.MuntashirAkon:libadb-android:3.1.1")
-    implementation("org.conscrypt:conscrypt-android:2.5.3")
-    implementation("org.bouncycastle:bcpkix-jdk15to18:1.81")
 
     testImplementation("junit:junit:4.13.2")
 }

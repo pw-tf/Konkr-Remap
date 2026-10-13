@@ -3,11 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <!-- Granted by the helper over ADB; lets the app re-enable Wireless debugging and itself after a reboot. -->
-    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
-        tools:ignore="ProtectedPermissions" />
     <!-- Per-app profiles: list launchable apps. -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
@@ -40,6 +36,18 @@
                 android:resource="@xml/accessibility" />
         </service>
 
-        <receiver android:name=".PairReceiver" android:exported="false" />
+        <!-- The keyboard that types remapped keys into the app in front. -->
+        <service
+            android:name=".RemapKeyboard"
+            android:exported="true"
+            android:label="Konkr Remap"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+        </service>
     </application>
 </manifest>

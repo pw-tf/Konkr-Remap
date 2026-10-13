@@ -11,13 +11,12 @@ in a game that gets them backwards.
 - **Press, Hold and Double press.** Give one button up to three actions.
 - **Per-app setups.** Different mappings in Chrome than in your games, switched automatically.
 - **Chrome shortcuts built in.** Next/previous tab, new/close tab, reload, back/forward, address bar, find, zoom.
-- **No root, no PC, no Shizuku.** The app starts its own helper through Android's Wireless debugging.
+- **No root, no PC, no pairing.** Remapped keys are typed by Konkr Remap's own keyboard.
 - **Auto-update.** The app tells you when a new version is out and installs it in one tap.
 
 ## Requirements
 
 - Konkr Pocket Fit or Pocket Fit Elite (any Android 11+ device should work)
-- Wi-Fi, for the one-time pairing and to restart the helper after a reboot
 
 ## Install
 
@@ -27,32 +26,22 @@ in a game that gets them backwards.
 
 Later updates are installed from inside the app. You don't need to come back here.
 
-## First-time setup (about 2 minutes)
+## First-time setup (about 1 minute)
 
-Konkr Remap has two parts. The app reads your button presses, and a small **helper** sends the remapped keys to
-other apps. Android only lets the helper do that when it's started through Wireless debugging, which is why
-pairing is needed. You only pair once.
+Konkr Remap has two parts. A **remapping service** sees your button presses, and the **Konkr Remap keyboard** types
+the remapped keys into the app in front. Android only lets the selected keyboard send keys to other apps, which is
+why the app is also a keyboard. It has no keys of its own and never sees what you type.
 
-### 1. Turn on Developer options
+Open Konkr Remap and follow the three steps on screen:
 
-Settings › About device › tap **Build number** 7 times until it says you're a developer.
+1. **Turn on remapping.** Tap **Turn on**, choose **Konkr Remap** and switch it on.
+   If Android says *Restricted setting*, go back, tap **App info**, then **⋮ › Allow restricted settings**, and
+   try again. Android does this for every app installed from a downloaded APK.
+2. **Turn on the Konkr Remap keyboard.** Tap **Turn on** and switch on **Konkr Remap** in the keyboard list.
+   Android shows its standard warning that keyboards can collect what you type; this one has no keys and can't.
+3. **Select the keyboard.** Tap **Select** and choose **Konkr Remap**.
 
-### 2. Pair and start the helper
-
-1. Connect to Wi-Fi.
-2. Open Konkr Remap and tap **Pair**. Allow notifications when asked.
-3. Developer options opens. Turn on **Wireless debugging**, open it, and tap **Pair device with pairing code**.
-   Leave the code on screen.
-4. Pull down the notification shade. On the Konkr Remap notification tap **Enter pairing code**, type the 6-digit
-   code and send it.
-5. The notification changes to **Ready!** The helper is running and remapping is switched on.
-
-### 3. Turn on remapping (if it isn't already)
-
-If step 2 of the app still shows **Turn on remapping**, tap **Turn on**. When the helper is running this works in
-one tap. Otherwise Android's Accessibility settings open: choose **Konkr Remap** and switch it on.
-
-When both steps are done the app shows **● Remapping is active**.
+When all three are done the app shows **● Remapping is active**. Nothing else is needed after a reboot.
 
 ## Using it
 
@@ -80,11 +69,13 @@ app's setup, select it and tap the **×** on its chip.
 
 Remapping is paused while Konkr Remap itself is open, so your buttons always work normally in this app.
 
-### After a reboot
+### Typing text
 
-The helper stops when the device restarts. Konkr Remap restarts it by itself: it turns Wireless debugging back
-on and reconnects. This needs Wi-Fi. Until the helper is back, your buttons work as normal (not remapped). If it
-doesn't come back, open the app and tap **Start**.
+When you tap a text box, the Konkr Remap keyboard shows a small bar instead of keys. Tap **Switch keyboard** to
+type with your normal keyboard (e.g. Gboard). The next time you press a remapped button, Konkr Remap switches back
+to its keyboard by itself.
+
+Home, Back, Recent apps, volume and media keys don't need the keyboard, so they work even while you're typing.
 
 ### Updates
 
@@ -95,19 +86,18 @@ in Android's install prompt. The first time, Android asks you to allow Konkr Rem
 
 | Problem | Fix |
 |---|---|
-| "Pairing screen not found" | Keep the *Pair device with pairing code* dialog open while you type the code, and make sure you're on Wi-Fi. |
-| "Wireless debugging not found" | Connect to Wi-Fi and turn on Wireless debugging in Developer options, then tap **Start**. |
-| "Not paired yet" | Pair again (Setup step 2). Pairings can be removed in Wireless debugging › Paired devices. |
-| "Restricted setting" when turning on accessibility | Start the helper first and use the app's **Turn on** button, or go to Settings › Apps › Konkr Remap › ⋮ › **Allow restricted settings**. |
+| "Restricted setting" when turning on remapping | Settings › Apps › Konkr Remap › ⋮ › **Allow restricted settings**, then turn it on again. |
+| Remapped keys do nothing | Check the app's setup steps: the Konkr Remap keyboard must be turned on and selected. |
+| A key only works the second time | The first press switched back from your typing keyboard; Konkr Remap sends it as soon as its keyboard is ready. If it's still lost, press again. |
 | A button can't be detected | Analog triggers/sticks that only report a position (not a press) can't be remapped. |
-| A game ignores remapped buttons | Some games only accept input from a real controller. Try mapping to a keyboard key, or leave that button unmapped for that game with a per-app setup. |
+| A game ignores remapped buttons | Some games read the controller directly and ignore keys from a keyboard. Map to a keyboard key the game supports, or leave that button unmapped for that game with a per-app setup. |
 
 ## Privacy
 
-- The accessibility service only looks at **button presses** and **which app is in front** (for per-app
-  setups). It doesn't read screen content, and nothing leaves the device.
-- The only network request is the update check against this repo's GitHub Releases.
-- The helper runs on the device only and accepts commands from the Konkr Remap app only.
+- The remapping (accessibility) service only looks at **button presses** and **which app is in front** (for
+  per-app setups). It doesn't read screen content.
+- The keyboard only sends keys. It has no keys of its own, so there's nothing for it to record.
+- The only network request is the update check against this repo's GitHub Releases. Nothing else leaves the device.
 
 ---
 
@@ -144,9 +134,8 @@ Version rules, so the in-app updater sees the new version:
 
 | File | Role |
 |---|---|
-| `RemapService.kt` | Accessibility service: receives every physical key press and tracks the foreground app. |
+| `RemapService.kt` | Accessibility service: receives every physical key press, tracks the foreground app, and handles Home/Back/Recents, volume and media keys itself. |
 | `Mappings.kt` | Mapping model, JSON storage, and `Gestures` (press / hold / double-press logic, unit tested). |
-| `Helper.kt` | `Helper` runs as the shell user via `app_process` and injects key events. `Injector` is the app's client (local socket, peer-uid checked, version handshake so the helper restarts after an update). |
-| `Adb.kt` | Pairs with and connects to the device's own Wireless debugging ([libadb-android](https://github.com/MuntashirAkon/libadb-android)) to launch the helper, and grants the app `WRITE_SECURE_SETTINGS` so it can re-enable things after a reboot. |
+| `Keyboard.kt` | `RemapKeyboard` input method: types remapped keys (with Ctrl/Shift/Alt/Meta) into the app in front through its input connection. The service switches back to it when another keyboard is selected. |
 | `Updater.kt` | Checks GitHub Releases and installs through `PackageInstaller`. |
 | `MainActivity.kt` | Jetpack Compose UI. |
