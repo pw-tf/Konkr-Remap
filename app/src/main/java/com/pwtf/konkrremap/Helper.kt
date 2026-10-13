@@ -22,11 +22,14 @@ private const val SOCKET = "konkrremap"
  * Only accepts connections from the app's own uid.
  */
 object Helper {
+    /** The helper's stdout/stderr, readable over ADB when it fails to start. */
+    const val LOG = "/data/local/tmp/konkrremap.log"
+
     /** Shell command that grants the app WRITE_SECURE_SETTINGS and launches the helper detached from the ADB session. */
     fun startCommand(appUid: Int) =
         "pm grant $PKG android.permission.WRITE_SECURE_SETTINGS; " +
             "CLASSPATH=\$(pm path $PKG | head -n1 | cut -d: -f2) setsid app_process /system/bin " +
-            "--nice-name=konkrremap_helper $PKG.Helper $appUid </dev/null >/dev/null 2>&1 &"
+            "--nice-name=konkrremap_helper $PKG.Helper $appUid </dev/null >$LOG 2>&1 &"
 
     @JvmStatic
     fun main(args: Array<String>) {

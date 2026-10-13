@@ -21,6 +21,7 @@ import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.math.BigInteger
 import java.security.KeyFactory
@@ -61,6 +62,14 @@ class Adb(ctx: Context) : AbsAdbConnectionManager() {
     override fun getCertificate() = keys.second
     override fun getDeviceName() = "Konkr Remap"
 
+    /** Runs a shell command and returns its output. */
+    private fun shell(cmd: String): String {
+        val out = ByteArrayOutputStream()
+        // libadb throws "Stream closed." instead of returning -1 when the command ends, so that's the normal exit.
+        openStream("shell:$cmd").use { s -> runCatching { s.openInputStream().copyTo(out) } }
+        return out.toString().trim()
+    }
+
     companion object {
         /** Starts the helper over Wireless debugging. Returns null on success, else a message for the user. */
         @Synchronized
@@ -71,10 +80,11 @@ class Adb(ctx: Context) : AbsAdbConnectionManager() {
             return try {
                 Adb(ctx).use { adb ->
                     if (!adb.connectTls(ctx, 10_000)) return "Wireless debugging not found. Connect to Wi-Fi and turn it on."
-                    adb.openStream("shell:" + Helper.startCommand(Process.myUid())).use { it.openInputStream().readBytes() }
+                    val out = adb.shell(Helper.startCommand(Process.myUid()))
+                    repeat(50) { if (Injector.connected()) return null; Thread.sleep(100) }
+                    // Show what went wrong: the start command's output plus whatever the helper printed before dying.
+                    "Helper didn't start. ${out}\n${adb.shell("tail -n 5 ${Helper.LOG}")}".trim()
                 }
-                repeat(30) { if (Injector.connected()) return null; Thread.sleep(100) }
-                "Helper didn't start. Try again."
             } catch (e: AdbPairingRequiredException) {
                 "Not paired yet. Tap Pair first."
             } catch (e: Exception) {
@@ -136,7 +146,10 @@ object Pairing {
         notify(ctx, Notification.Builder(ctx, CHANNEL).setContentText(text).addAction(action))
     }
 
-    fun done(ctx: Context, text: String) = notify(ctx, Notification.Builder(ctx, CHANNEL).setContentText(text).setTimeoutAfter(15_000))
+    fun done(ctx: Context, text: String) = notify(
+        ctx,
+        Notification.Builder(ctx, CHANNEL).setContentText(text).setStyle(Notification.BigTextStyle().bigText(text)),
+    )
 
     private fun notify(ctx: Context, b: Notification.Builder) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
