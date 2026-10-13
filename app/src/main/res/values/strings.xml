@@ -1,0 +1,3 @@
+<resources>
+    <string name="a11y_description">Reads your controller buttons so Konkr Remap can turn them into other buttons and keys. No screen content is read or stored.</string>
+</resources>
