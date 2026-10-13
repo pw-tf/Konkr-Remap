@@ -31,7 +31,9 @@ The app checks this repo's latest GitHub Release on launch and offers a one-tap 
    ```
    Secrets: `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS` (`konkr`), `KEY_PASSWORD`.
    Back up `release.jks`: if you lose it, users have to uninstall to get updates.
-2. Tag and push: `git tag v0.1.0 && git push origin v0.1.0`. CI builds, signs and publishes the APK.
+2. Actions › Build › **Run workflow**, enter a version like `0.2.0` (or push a `v0.2.0` tag). CI builds, signs,
+   tags and publishes the APK. Use plain `0.x.y` numbers for betas: no `-beta` suffix and no "pre-release" box,
+   or the in-app updater won't see it.
 
 Every other push builds a debug APK as a workflow artifact for testing. It is signed differently from releases,
 so uninstall it before installing a release.
