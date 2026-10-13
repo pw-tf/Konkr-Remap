@@ -7,8 +7,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Release version, e.g. 0.1.0 (empty = test build only)
-        required: false
+        description: Release version, e.g. 0.1.0
+        required: true
 
 jobs:
   build:
